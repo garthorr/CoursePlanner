@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CourseBoard } from "@/components/course-board";
 import { UnitDialog } from "@/components/unit-dialog";
 import { LessonForm } from "@/components/lesson-form";
+import { CsvImportDialog } from "@/components/csv-import-dialog";
 import type { Course, Lesson } from "@/lib/types";
 
 export default function CourseDetailPage() {
@@ -21,6 +22,7 @@ export default function CourseDetailPage() {
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
   const [activeUnitId, setActiveUnitId] = useState<string | null>(null);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
 
   const fetchCourse = useCallback(async () => {
     const res = await fetch(`/api/courses/${courseId}`);
@@ -151,10 +153,16 @@ export default function CourseDetailPage() {
             {totalDays} day{totalDays !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={() => setUnitDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add Unit
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCsvImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button onClick={() => setUnitDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Unit
+          </Button>
+        </div>
       </div>
 
       {course.units.length === 0 ? (
@@ -187,6 +195,13 @@ export default function CourseDetailPage() {
         onOpenChange={setLessonDialogOpen}
         lesson={editingLesson}
         onSubmit={handleLessonSubmit}
+      />
+
+      <CsvImportDialog
+        open={csvImportOpen}
+        onOpenChange={setCsvImportOpen}
+        courseId={courseId}
+        onImported={fetchCourse}
       />
     </div>
   );
