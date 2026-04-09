@@ -86,7 +86,13 @@ export default function CourseDetailPage() {
     fetchCourse();
   };
 
-  const handleLessonSubmit = async (data: { title: string; description: string; duration: number }) => {
+  const handleLessonSubmit = async (data: {
+    title: string;
+    description: string;
+    duration: number;
+    textbookCorrelations: { textbook: string; reference: string }[];
+    links: { url: string; label: string | null }[];
+  }) => {
     if (editingLesson) {
       await fetch(`/api/lessons/${editingLesson.id}`, {
         method: "PUT",

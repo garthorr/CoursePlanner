@@ -29,20 +29,60 @@ export async function PUT(
 ) {
   const { lessonId } = await params;
   const body = await request.json();
-  const { title, description, duration } = body;
+  const { title, description, duration, textbookCorrelations, links } = body;
 
-  const lesson = await prisma.lesson.update({
-    where: { id: lessonId },
-    data: {
-      ...(title !== undefined && { title }),
-      ...(description !== undefined && { description }),
-      ...(duration !== undefined && { duration }),
-    },
-    include: {
-      textbookCorrelations: true,
-      links: true,
-      attachments: true,
-    },
+  const lesson = await prisma.$transaction(async (tx) => {
+    // Update lesson fields
+    const updated = await tx.lesson.update({
+      where: { id: lessonId },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(duration !== undefined && { duration }),
+      },
+    });
+
+    // Sync textbook correlations if provided
+    if (textbookCorrelations !== undefined) {
+      await tx.textbookCorrelation.deleteMany({ where: { lessonId } });
+      if (textbookCorrelations.length > 0) {
+        await tx.textbookCorrelation.createMany({
+          data: textbookCorrelations
+            .filter((c: { textbook: string; reference: string }) => c.textbook.trim())
+            .map((c: { textbook: string; reference: string }) => ({
+              textbook: c.textbook,
+              reference: c.reference,
+              lessonId,
+            })),
+        });
+      }
+    }
+
+    // Sync links if provided
+    if (links !== undefined) {
+      await tx.lessonLink.deleteMany({ where: { lessonId } });
+      if (links.length > 0) {
+        await tx.lessonLink.createMany({
+          data: links
+            .filter((l: { url: string }) => l.url.trim())
+            .map((l: { url: string; label?: string }) => ({
+              url: l.url,
+              label: l.label || null,
+              lessonId,
+            })),
+        });
+      }
+    }
+
+    // Return fully loaded lesson
+    return tx.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        textbookCorrelations: true,
+        links: true,
+        attachments: true,
+      },
+    });
   });
 
   return NextResponse.json(lesson);
