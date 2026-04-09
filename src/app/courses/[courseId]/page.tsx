@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { UnitSection } from "@/components/unit-section";
+import { CourseBoard } from "@/components/course-board";
 import { UnitDialog } from "@/components/unit-dialog";
 import { LessonForm } from "@/components/lesson-form";
 import type { Course, Lesson } from "@/lib/types";
@@ -74,6 +74,15 @@ export default function CourseDetailPage() {
   const handleDeleteLesson = async (lessonId: string) => {
     if (!confirm("Delete this lesson?")) return;
     await fetch(`/api/lessons/${lessonId}`, { method: "DELETE" });
+    fetchCourse();
+  };
+
+  const handleReorder = async (lessonId: string, targetUnitId: string, newIndex: number) => {
+    await fetch("/api/lessons/reorder", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lessonId, targetUnitId, newIndex }),
+    });
     fetchCourse();
   };
 
@@ -154,20 +163,15 @@ export default function CourseDetailPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {course.units.map((unit) => (
-            <UnitSection
-              key={unit.id}
-              unit={unit}
-              courseSequence={course.sequence}
-              onUpdateUnit={handleUpdateUnit}
-              onDeleteUnit={handleDeleteUnit}
-              onAddLesson={handleAddLesson}
-              onEditLesson={handleEditLesson}
-              onDeleteLesson={handleDeleteLesson}
-            />
-          ))}
-        </div>
+        <CourseBoard
+          course={course}
+          onReorder={handleReorder}
+          onUpdateUnit={handleUpdateUnit}
+          onDeleteUnit={handleDeleteUnit}
+          onAddLesson={handleAddLesson}
+          onEditLesson={handleEditLesson}
+          onDeleteLesson={handleDeleteLesson}
+        />
       )}
 
       <UnitDialog open={unitDialogOpen} onOpenChange={setUnitDialogOpen} onSubmit={handleAddUnit} />
