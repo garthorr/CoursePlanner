@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { BookOpen, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CourseCard } from "@/components/course-card";
@@ -8,6 +9,7 @@ import { CourseDialog } from "@/components/course-dialog";
 import type { CourseListItem } from "@/lib/types";
 
 export default function CoursesPage() {
+  const router = useRouter();
   const [courses, setCourses] = useState<CourseListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,6 +42,28 @@ export default function CoursesPage() {
     fetchCourses();
   };
 
+  const handleClone = async (courseId: string) => {
+    const res = await fetch(`/api/courses/${courseId}/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (res.ok) {
+      const cloned = await res.json();
+      fetchCourses();
+      router.push(`/courses/${cloned.id}`);
+    }
+  };
+
+  const handleToggleTemplate = async (courseId: string, isTemplate: boolean) => {
+    if (isTemplate) {
+      await fetch(`/api/courses/${courseId}/template`, { method: "DELETE" });
+    } else {
+      await fetch(`/api/courses/${courseId}/template`, { method: "POST" });
+    }
+    fetchCourses();
+  };
+
   const handleSubmit = async (data: { name: string; code: string }) => {
     if (editingCourse) {
       await fetch(`/api/courses/${editingCourse.id}`, {
@@ -65,6 +89,9 @@ export default function CoursesPage() {
       </div>
     );
   }
+
+  const activeCourses = courses.filter((c) => !c.isTemplate);
+  const templates = courses.filter((c) => c.isTemplate);
 
   return (
     <div className="space-y-6">
@@ -92,16 +119,43 @@ export default function CoursesPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((course) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        <>
+          {activeCourses.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3">Active Courses</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {activeCourses.map((course) => (
+                  <CourseCard
+                    key={course.id}
+                    course={course}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onClone={handleClone}
+                    onToggleTemplate={handleToggleTemplate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {templates.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-3">Templates</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {templates.map((course) => (
+                  <CourseCard
+                    key={course.id}
+                    course={course}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onClone={handleClone}
+                    onToggleTemplate={handleToggleTemplate}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <CourseDialog

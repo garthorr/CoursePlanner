@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Upload, BarChart3, Layers } from "lucide-react";
+import { ArrowLeft, Plus, Upload, BarChart3, Layers, Copy, Star, StarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CourseBoard } from "@/components/course-board";
@@ -148,6 +148,7 @@ export default function CourseDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">{course.name}</h1>
             <Badge variant="secondary">{course.code}</Badge>
+            {course.isTemplate && <Badge variant="outline">Template</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">
             {course.units.length} unit{course.units.length !== 1 ? "s" : ""} &middot;{" "}
@@ -155,12 +156,45 @@ export default function CourseDetailPage() {
             {totalDays} day{totalDays !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setCsvImportOpen(true)}>
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (course.isTemplate) {
+                await fetch(`/api/courses/${courseId}/template`, { method: "DELETE" });
+              } else {
+                await fetch(`/api/courses/${courseId}/template`, { method: "POST" });
+              }
+              fetchCourse();
+            }}
+          >
+            {course.isTemplate ? <StarOff className="h-4 w-4" /> : <Star className="h-4 w-4" />}
+            {course.isTemplate ? "Unmark Template" : "Save as Template"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const res = await fetch(`/api/courses/${courseId}/clone`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+              });
+              if (res.ok) {
+                const cloned = await res.json();
+                window.location.href = `/courses/${cloned.id}`;
+              }
+            }}
+          >
+            <Copy className="h-4 w-4" />
+            Clone
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCsvImportOpen(true)}>
             <Upload className="h-4 w-4" />
             Import CSV
           </Button>
-          <Button onClick={() => setUnitDialogOpen(true)}>
+          <Button size="sm" onClick={() => setUnitDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             Add Unit
           </Button>

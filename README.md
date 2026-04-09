@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CoursePlanner
 
-## Getting Started
+A responsive webapp for teachers to create and manage course plans with pacing analytics.
 
-First, run the development server:
+## Features
+
+- **Courses**: Create, edit, clone, and template courses
+- **Units & Lessons**: Organize lessons into units with drag-and-drop reordering
+- **Auto-numbering**: Lesson codes (Course.Unit.Lesson) update automatically on reorder
+- **Rich Text**: TipTap editor for lesson descriptions
+- **Attachments**: Upload files or link cloud resources, classified by type (assessment, classwork, notes, etc.)
+- **Textbook Correlations**: Track textbook references per lesson
+- **Links**: Associate URLs with lessons
+- **CSV Import**: Import lessons from spreadsheets with column mapping
+- **Pacing Analytics**: Track instructional days vs. lesson days with buffer allocation
+- **Templates**: Save courses as templates and clone for new semesters
+
+## Tech Stack
+
+- Next.js 14+ (App Router)
+- PostgreSQL + Prisma ORM
+- shadcn/ui + Tailwind CSS
+- TipTap (rich text)
+- @dnd-kit (drag and drop)
+- Docker Compose
+
+## Quick Start
 
 ```bash
+# Clone and install
+git clone <repo-url>
+cd CoursePlanner
+npm install
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your DATABASE_URL
+
+# Run with Docker
+docker-compose up --build
+
+# Or run locally (requires running PostgreSQL)
+npx prisma db push
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Docker
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker-compose up --build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This starts:
+- **app** on port 3000
+- **db** (PostgreSQL) on port 5432
+- **migrate** runs schema push on startup
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:postgres@db:5432/courseplanner` |
+| `UPLOAD_DIR` | File upload directory | `./uploads` |
