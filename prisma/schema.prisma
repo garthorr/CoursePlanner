@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Course {
+  id         String   @id @default(cuid())
+  name       String
+  code       String
+  sequence   Int      @default(autoincrement())
+  isTemplate Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  units  Unit[]
+  pacing Pacing?
+}
+
+model Unit {
+  id         String   @id @default(cuid())
+  name       String
+  sequence   Int
+  bufferDays Int      @default(0)
+  courseId    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  duration    Int      @default(1)
+  sequence    Int
+  unitId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  unit                 Unit                  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  textbookCorrelations TextbookCorrelation[]
+  links                LessonLink[]
+  attachments          Attachment[]
+
+  @@index([unitId])
+}
+
+model TextbookCorrelation {
+  id        String @id @default(cuid())
+  textbook  String
+  reference String
+  lessonId  String
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+model LessonLink {
+  id       String  @id @default(cuid())
+  url      String
+  label    String?
+  lessonId String
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+model Attachment {
+  id        String         @id @default(cuid())
+  name      String
+  type      AttachmentType
+  filePath  String?
+  url       String?
+  lessonId  String
+  createdAt DateTime       @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+enum AttachmentType {
+  ASSESSMENT
+  CLASSWORK
+  NOTES
+  HOMEWORK
+  RESOURCE
+  OTHER
+}
+
+model Pacing {
+  id        String   @id @default(cuid())
+  totalDays Int?
+  courseId   String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  schoolDates SchoolDate[]
+}
+
+model SchoolDate {
+  id       String   @id @default(cuid())
+  date     DateTime
+  excluded Boolean  @default(false)
+  pacingId String
+
+  pacing Pacing @relation(fields: [pacingId], references: [id], onDelete: Cascade)
+
+  @@index([pacingId])
+}
