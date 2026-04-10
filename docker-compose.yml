@@ -20,6 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -30,6 +31,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   # Run migrations on startup — uses a dedicated migrate stage in the
   # Dockerfile that ships the full node_modules so the Prisma CLI can
