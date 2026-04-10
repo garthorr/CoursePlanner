@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -13,6 +14,28 @@ interface RichTextEditorProps {
   onChange: (html: string) => void;
 }
 
+function ToolbarButton({
+  onClick,
+  active,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={cn("h-7 w-7", active && "bg-accent")}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
 export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -21,6 +44,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
       TiptapLink.configure({ openOnClick: false }),
     ],
     content,
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
@@ -32,27 +56,17 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
     },
   });
 
-  if (!editor) return null;
+  // Sync external content changes (e.g. when switching to a different lesson)
+  // without disrupting in-progress typing.
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    if (content !== current) {
+      editor.commands.setContent(content || "", { emitUpdate: false });
+    }
+  }, [content, editor]);
 
-  const ToolbarButton = ({
-    onClick,
-    active,
-    children,
-  }: {
-    onClick: () => void;
-    active?: boolean;
-    children: React.ReactNode;
-  }) => (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className={cn("h-7 w-7", active && "bg-accent")}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  );
+  if (!editor) return null;
 
   return (
     <div className="rounded-md border">

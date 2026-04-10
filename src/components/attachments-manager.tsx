@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, Trash2, Upload, Link2 } from "lucide-react";
+import { Trash2, Upload, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,49 +44,74 @@ export function AttachmentsManager({ lessonId, attachments, onAttachmentsChange 
     if (!files || !lessonId) return;
 
     setUploading(true);
-    for (const file of Array.from(files)) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("lessonId", lessonId);
-      formData.append("type", uploadType);
+    // Accumulate locally to avoid stale closure overwriting prior uploads
+    const uploaded: Attachment[] = [];
+    let hadFailure = false;
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("lessonId", lessonId);
+        formData.append("type", uploadType);
 
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (res.ok) {
-        const attachment = await res.json();
-        onAttachmentsChange([...attachments, attachment]);
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: formData });
+          if (!res.ok) {
+            hadFailure = true;
+            continue;
+          }
+          uploaded.push(await res.json());
+        } catch (err) {
+          console.error("Upload failed:", err);
+          hadFailure = true;
+        }
       }
+      if (uploaded.length > 0) {
+        onAttachmentsChange([...attachments, ...uploaded]);
+      }
+      if (hadFailure) {
+        alert("One or more files failed to upload.");
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleAddCloudLink = async () => {
     if (!cloudUrl || !lessonId) return;
 
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        lessonId,
-        url: cloudUrl,
-        name: cloudName || cloudUrl,
-        type: cloudType,
-      }),
-    });
-
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lessonId,
+          url: cloudUrl,
+          name: cloudName || cloudUrl,
+          type: cloudType,
+        }),
+      });
+      if (!res.ok) throw new Error(`Add link failed: ${res.status}`);
       const attachment = await res.json();
       onAttachmentsChange([...attachments, attachment]);
       setCloudUrl("");
       setCloudName("");
       setLinkMode(false);
+    } catch (err) {
+      console.error("Failed to add cloud link:", err);
+      alert("Failed to add cloud link.");
     }
   };
 
   const handleDelete = async (attachmentId: string) => {
-    const res = await fetch(`/api/upload?id=${attachmentId}`, { method: "DELETE" });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/upload?id=${attachmentId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
       onAttachmentsChange(attachments.filter((a) => a.id !== attachmentId));
+    } catch (err) {
+      console.error("Failed to delete attachment:", err);
+      alert("Failed to delete attachment.");
     }
   };
 

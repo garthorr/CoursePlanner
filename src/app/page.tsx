@@ -10,15 +10,26 @@ import type { CourseListItem } from "@/lib/types";
 export default function DashboardPage() {
   const [courses, setCourses] = useState<CourseListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/courses")
-      .then((res) => res.json())
-      .then((data) => {
-        setCourses(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/courses");
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setCourses(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load courses:", err);
+        if (!cancelled) setError("Failed to load courses. Please refresh.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const courseCount = courses.filter((c) => !c.isTemplate).length;
@@ -32,6 +43,14 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-destructive">{error}</p>
       </div>
     );
   }

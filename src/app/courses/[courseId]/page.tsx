@@ -19,6 +19,7 @@ export default function CourseDetailPage() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
   const [activeUnitId, setActiveUnitId] = useState<string | null>(null);
@@ -27,11 +28,23 @@ export default function CourseDetailPage() {
   const [view, setView] = useState<"content" | "pacing">("content");
 
   const fetchCourse = useCallback(async () => {
-    const res = await fetch(`/api/courses/${courseId}`);
-    if (res.ok) {
-      setCourse(await res.json());
+    try {
+      const res = await fetch(`/api/courses/${courseId}`);
+      if (res.status === 404) {
+        setCourse(null);
+        setError(null);
+        return;
+      }
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const data = await res.json();
+      setCourse(data);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to load course:", err);
+      setError("Failed to load course. Please refresh.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [courseId]);
 
   useEffect(() => {
@@ -39,28 +52,46 @@ export default function CourseDetailPage() {
   }, [fetchCourse]);
 
   const handleAddUnit = async (name: string) => {
-    await fetch(`/api/courses/${courseId}/units`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    setUnitDialogOpen(false);
-    fetchCourse();
+    try {
+      const res = await fetch(`/api/courses/${courseId}/units`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(`Add unit failed: ${res.status}`);
+      setUnitDialogOpen(false);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to add unit:", err);
+      alert("Failed to add unit.");
+    }
   };
 
   const handleUpdateUnit = async (unitId: string, name: string) => {
-    await fetch(`/api/units/${unitId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    fetchCourse();
+    try {
+      const res = await fetch(`/api/units/${unitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error(`Update unit failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to update unit:", err);
+      alert("Failed to update unit.");
+    }
   };
 
   const handleDeleteUnit = async (unitId: string) => {
     if (!confirm("Delete this unit and all its lessons?")) return;
-    await fetch(`/api/units/${unitId}`, { method: "DELETE" });
-    fetchCourse();
+    try {
+      const res = await fetch(`/api/units/${unitId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete unit failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to delete unit:", err);
+      alert("Failed to delete unit.");
+    }
   };
 
   const handleAddLesson = (unitId: string) => {
@@ -77,17 +108,30 @@ export default function CourseDetailPage() {
 
   const handleDeleteLesson = async (lessonId: string) => {
     if (!confirm("Delete this lesson?")) return;
-    await fetch(`/api/lessons/${lessonId}`, { method: "DELETE" });
-    fetchCourse();
+    try {
+      const res = await fetch(`/api/lessons/${lessonId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete lesson failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to delete lesson:", err);
+      alert("Failed to delete lesson.");
+    }
   };
 
   const handleReorder = async (lessonId: string, targetUnitId: string, newIndex: number) => {
-    await fetch("/api/lessons/reorder", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lessonId, targetUnitId, newIndex }),
-    });
-    fetchCourse();
+    try {
+      const res = await fetch("/api/lessons/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonId, targetUnitId, newIndex }),
+      });
+      if (!res.ok) throw new Error(`Reorder failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to reorder lesson:", err);
+      alert("Failed to reorder lesson.");
+      await fetchCourse();
+    }
   };
 
   const handleLessonSubmit = async (data: {
@@ -97,27 +141,73 @@ export default function CourseDetailPage() {
     textbookCorrelations: { textbook: string; reference: string }[];
     links: { url: string; label: string | null }[];
   }) => {
-    if (editingLesson) {
-      await fetch(`/api/lessons/${editingLesson.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+    try {
+      const res = editingLesson
+        ? await fetch(`/api/lessons/${editingLesson.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          })
+        : activeUnitId
+          ? await fetch(`/api/units/${activeUnitId}/lessons`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            })
+          : null;
+      if (!res || !res.ok) throw new Error(`Save lesson failed: ${res?.status}`);
+      setLessonDialogOpen(false);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to save lesson:", err);
+      alert("Failed to save lesson.");
+    }
+  };
+
+  const handleToggleTemplate = async () => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/template`, {
+        method: course?.isTemplate ? "DELETE" : "POST",
       });
-    } else if (activeUnitId) {
-      await fetch(`/api/units/${activeUnitId}/lessons`, {
+      if (!res.ok) throw new Error(`Toggle failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to toggle template:", err);
+      alert("Failed to update template status.");
+    }
+  };
+
+  const handleClone = async () => {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/clone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({}),
       });
+      if (!res.ok) throw new Error(`Clone failed: ${res.status}`);
+      const cloned = await res.json();
+      window.location.href = `/courses/${cloned.id}`;
+    } catch (err) {
+      console.error("Failed to clone course:", err);
+      alert("Failed to clone course.");
     }
-    setLessonDialogOpen(false);
-    fetchCourse();
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-muted-foreground">Loading course...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button variant="outline" onClick={() => { setLoading(true); fetchCourse(); }}>
+          Retry
+        </Button>
       </div>
     );
   }
@@ -157,36 +247,11 @@ export default function CourseDetailPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              if (course.isTemplate) {
-                await fetch(`/api/courses/${courseId}/template`, { method: "DELETE" });
-              } else {
-                await fetch(`/api/courses/${courseId}/template`, { method: "POST" });
-              }
-              fetchCourse();
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={handleToggleTemplate}>
             {course.isTemplate ? <StarOff className="h-4 w-4" /> : <Star className="h-4 w-4" />}
             {course.isTemplate ? "Unmark Template" : "Save as Template"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              const res = await fetch(`/api/courses/${courseId}/clone`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({}),
-              });
-              if (res.ok) {
-                const cloned = await res.json();
-                window.location.href = `/courses/${cloned.id}`;
-              }
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={handleClone}>
             <Copy className="h-4 w-4" />
             Clone
           </Button>

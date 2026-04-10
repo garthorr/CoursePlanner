@@ -55,9 +55,17 @@ export function CsvImportDialog({ open, onOpenChange, courseId, onImported }: Cs
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      error: (err) => {
+        console.error("CSV parse error:", err);
+        alert("Failed to parse CSV file.");
+      },
       complete: (results) => {
         const data = results.data as Record<string, string>[];
         const csvHeaders = results.meta.fields || [];
+        if (csvHeaders.length === 0) {
+          alert("No columns detected in CSV.");
+          return;
+        }
         setHeaders(csvHeaders);
         setRows(data);
         setResult(null);
@@ -92,7 +100,6 @@ export function CsvImportDialog({ open, onOpenChange, courseId, onImported }: Cs
   const handleImport = async () => {
     setImporting(true);
 
-    // Map rows using column mapping
     const mappedRows = rows.map((row) => {
       const mapped: Record<string, string | number> = {};
       for (const [header, field] of Object.entries(columnMap)) {
@@ -108,19 +115,22 @@ export function CsvImportDialog({ open, onOpenChange, courseId, onImported }: Cs
       return mapped;
     });
 
-    const res = await fetch("/api/import/csv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ courseId, rows: mappedRows }),
-    });
-
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/import/csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId, rows: mappedRows }),
+      });
+      if (!res.ok) throw new Error(`Import failed: ${res.status}`);
       const data = await res.json();
       setResult(data);
       onImported();
+    } catch (err) {
+      console.error("Failed to import CSV:", err);
+      alert("Failed to import CSV.");
+    } finally {
+      setImporting(false);
     }
-
-    setImporting(false);
   };
 
   const handleClose = () => {

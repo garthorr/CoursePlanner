@@ -12,14 +12,23 @@ export default function CoursesPage() {
   const router = useRouter();
   const [courses, setCourses] = useState<CourseListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<CourseListItem | null>(null);
 
   const fetchCourses = useCallback(async () => {
-    const res = await fetch("/api/courses");
-    const data = await res.json();
-    setCourses(data);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/courses");
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const data = await res.json();
+      setCourses(Array.isArray(data) ? data : []);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to load courses:", err);
+      setError("Failed to load courses. Please refresh.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -38,54 +47,80 @@ export default function CoursesPage() {
 
   const handleDelete = async (courseId: string) => {
     if (!confirm("Are you sure you want to delete this course? This cannot be undone.")) return;
-    await fetch(`/api/courses/${courseId}`, { method: "DELETE" });
-    fetchCourses();
+    try {
+      const res = await fetch(`/api/courses/${courseId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      await fetchCourses();
+    } catch (err) {
+      console.error("Failed to delete course:", err);
+      alert("Failed to delete course.");
+    }
   };
 
   const handleClone = async (courseId: string) => {
-    const res = await fetch(`/api/courses/${courseId}/clone`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`Clone failed: ${res.status}`);
       const cloned = await res.json();
-      fetchCourses();
+      await fetchCourses();
       router.push(`/courses/${cloned.id}`);
+    } catch (err) {
+      console.error("Failed to clone course:", err);
+      alert("Failed to clone course.");
     }
   };
 
   const handleToggleTemplate = async (courseId: string, isTemplate: boolean) => {
-    if (isTemplate) {
-      await fetch(`/api/courses/${courseId}/template`, { method: "DELETE" });
-    } else {
-      await fetch(`/api/courses/${courseId}/template`, { method: "POST" });
+    try {
+      const res = await fetch(`/api/courses/${courseId}/template`, {
+        method: isTemplate ? "DELETE" : "POST",
+      });
+      if (!res.ok) throw new Error(`Toggle failed: ${res.status}`);
+      await fetchCourses();
+    } catch (err) {
+      console.error("Failed to toggle template:", err);
+      alert("Failed to update template status.");
     }
-    fetchCourses();
   };
 
   const handleSubmit = async (data: { name: string; code: string }) => {
-    if (editingCourse) {
-      await fetch(`/api/courses/${editingCourse.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-    } else {
-      await fetch("/api/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+    try {
+      const res = await fetch(
+        editingCourse ? `/api/courses/${editingCourse.id}` : "/api/courses",
+        {
+          method: editingCourse ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      setDialogOpen(false);
+      await fetchCourses();
+    } catch (err) {
+      console.error("Failed to save course:", err);
+      alert("Failed to save course.");
     }
-    setDialogOpen(false);
-    fetchCourses();
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-muted-foreground">Loading courses...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <p className="text-destructive">{error}</p>
+        <Button variant="outline" onClick={() => { setLoading(true); fetchCourses(); }}>
+          Retry
+        </Button>
       </div>
     );
   }

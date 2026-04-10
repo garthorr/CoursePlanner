@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,43 +36,46 @@ interface LessonFormProps {
 type LocalCorrelation = Omit<TextbookCorrelation, "id" | "lessonId"> & { id?: string; tempId?: string };
 type LocalLink = Omit<LessonLink, "id" | "lessonId"> & { id?: string; tempId?: string };
 
-export function LessonForm({ open, onOpenChange, lesson, onSubmit }: LessonFormProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [duration, setDuration] = useState(1);
-  const [correlations, setCorrelations] = useState<LocalCorrelation[]>([]);
-  const [links, setLinks] = useState<LocalLink[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+function correlationsFromLesson(lesson: Lesson | null | undefined): LocalCorrelation[] {
+  if (!lesson) return [];
+  return lesson.textbookCorrelations.map((c) => ({
+    id: c.id,
+    textbook: c.textbook,
+    reference: c.reference,
+  }));
+}
 
-  useEffect(() => {
-    if (lesson) {
-      setTitle(lesson.title);
-      setDescription(lesson.description || "");
-      setDuration(lesson.duration);
-      setCorrelations(
-        lesson.textbookCorrelations.map((c) => ({
-          id: c.id,
-          textbook: c.textbook,
-          reference: c.reference,
-        }))
-      );
-      setLinks(
-        lesson.links.map((l) => ({
-          id: l.id,
-          url: l.url,
-          label: l.label,
-        }))
-      );
-      setAttachments(lesson.attachments);
-    } else {
-      setTitle("");
-      setDescription("");
-      setDuration(1);
-      setCorrelations([]);
-      setLinks([]);
-      setAttachments([]);
-    }
-  }, [lesson, open]);
+function linksFromLesson(lesson: Lesson | null | undefined): LocalLink[] {
+  if (!lesson) return [];
+  return lesson.links.map((l) => ({
+    id: l.id,
+    url: l.url,
+    label: l.label,
+  }));
+}
+
+export function LessonForm({ open, onOpenChange, lesson, onSubmit }: LessonFormProps) {
+  // Derived state pattern: reset form fields when lesson or open changes.
+  const formKey = `${lesson?.id ?? "new"}-${open}`;
+  const [lastKey, setLastKey] = useState(formKey);
+  const [title, setTitle] = useState(lesson?.title ?? "");
+  const [description, setDescription] = useState(lesson?.description ?? "");
+  const [duration, setDuration] = useState(lesson?.duration ?? 1);
+  const [correlations, setCorrelations] = useState<LocalCorrelation[]>(() =>
+    correlationsFromLesson(lesson)
+  );
+  const [links, setLinks] = useState<LocalLink[]>(() => linksFromLesson(lesson));
+  const [attachments, setAttachments] = useState<Attachment[]>(lesson?.attachments ?? []);
+
+  if (lastKey !== formKey) {
+    setLastKey(formKey);
+    setTitle(lesson?.title ?? "");
+    setDescription(lesson?.description ?? "");
+    setDuration(lesson?.duration ?? 1);
+    setCorrelations(correlationsFromLesson(lesson));
+    setLinks(linksFromLesson(lesson));
+    setAttachments(lesson?.attachments ?? []);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

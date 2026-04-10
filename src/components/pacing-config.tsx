@@ -24,32 +24,45 @@ export function PacingConfig({ courseId, currentTotalDays, hasSchoolDates, onUpd
 
   const handleSaveManual = async () => {
     setSaving(true);
-    await fetch(`/api/courses/${courseId}/pacing`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ totalDays }),
-    });
-    setSaving(false);
-    onUpdate();
+    try {
+      const res = await fetch(`/api/courses/${courseId}/pacing`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalDays }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      onUpdate();
+    } catch (err) {
+      console.error("Failed to save pacing:", err);
+      alert("Failed to save pacing.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveCalendar = async () => {
     if (!startDate || !endDate) return;
     setSaving(true);
 
-    // Parse excluded dates (one per line, YYYY-MM-DD)
     const excludedDates = excludedDatesText
       .split("\n")
       .map((d) => d.trim())
       .filter((d) => d && /^\d{4}-\d{2}-\d{2}$/.test(d));
 
-    await fetch(`/api/courses/${courseId}/pacing/dates`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startDate, endDate, excludedDates }),
-    });
-    setSaving(false);
-    onUpdate();
+    try {
+      const res = await fetch(`/api/courses/${courseId}/pacing/dates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate, excludedDates }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      onUpdate();
+    } catch (err) {
+      console.error("Failed to generate calendar:", err);
+      alert("Failed to generate calendar.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

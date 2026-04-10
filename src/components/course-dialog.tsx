@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,18 +22,17 @@ interface CourseDialogProps {
 }
 
 export function CourseDialog({ open, onOpenChange, course, onSubmit }: CourseDialogProps) {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  // Derived state pattern: reset form when course or open state changes.
+  const formKey = `${course?.id ?? "new"}-${open}`;
+  const [lastKey, setLastKey] = useState(formKey);
+  const [name, setName] = useState(course?.name ?? "");
+  const [code, setCode] = useState(course?.code ?? "");
 
-  useEffect(() => {
-    if (course) {
-      setName(course.name);
-      setCode(course.code);
-    } else {
-      setName("");
-      setCode("");
-    }
-  }, [course, open]);
+  if (lastKey !== formKey) {
+    setLastKey(formKey);
+    setName(course?.name ?? "");
+    setCode(course?.code ?? "");
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

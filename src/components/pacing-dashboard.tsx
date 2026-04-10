@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PacingConfig } from "@/components/pacing-config";
 
@@ -40,16 +39,59 @@ interface PacingDashboardProps {
   courseId: string;
 }
 
+function BufferInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+}) {
+  const [local, setLocal] = useState(String(value));
+
+  useEffect(() => {
+    setLocal(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = Math.max(0, parseInt(local) || 0);
+    if (parsed !== value) onCommit(parsed);
+    else setLocal(String(value));
+  };
+
+  return (
+    <Input
+      type="number"
+      min={0}
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-16 h-7 text-xs"
+    />
+  );
+}
+
 export function PacingDashboard({ courseId }: PacingDashboardProps) {
   const [data, setData] = useState<PacingData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPacing = useCallback(async () => {
-    const res = await fetch(`/api/courses/${courseId}/pacing`);
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/courses/${courseId}/pacing`);
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       setData(await res.json());
+      setError(null);
+    } catch (err) {
+      console.error("Failed to load pacing data:", err);
+      setError("Failed to load pacing data.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [courseId]);
 
   useEffect(() => {
@@ -57,16 +99,39 @@ export function PacingDashboard({ courseId }: PacingDashboardProps) {
   }, [fetchPacing]);
 
   const handleBufferChange = async (unitId: string, bufferDays: number) => {
-    await fetch(`/api/units/${unitId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bufferDays }),
+    // Optimistic update so the input stays responsive
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        analytics: {
+          ...prev.analytics,
+          unitStats: prev.analytics.unitStats.map((u) =>
+            u.id === unitId ? { ...u, bufferDays } : u
+          ),
+        },
+      };
     });
-    fetchPacing();
+    try {
+      const res = await fetch(`/api/units/${unitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bufferDays }),
+      });
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+      await fetchPacing();
+    } catch (err) {
+      console.error("Failed to update buffer:", err);
+      await fetchPacing();
+    }
   };
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading pacing data...</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-destructive">{error}</p>;
   }
 
   if (!data) return null;
@@ -167,14 +232,9 @@ export function PacingDashboard({ courseId }: PacingDashboardProps) {
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
                       <span className="text-xs text-muted-foreground">Buffer:</span>
-                      <Input
-                        type="number"
-                        min={0}
+                      <BufferInput
                         value={unit.bufferDays}
-                        onChange={(e) =>
-                          handleBufferChange(unit.id, Math.max(0, parseInt(e.target.value) || 0))
-                        }
-                        className="w-16 h-7 text-xs"
+                        onCommit={(next) => handleBufferChange(unit.id, next)}
                       />
                     </div>
                   </div>
