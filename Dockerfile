@@ -46,3 +46,14 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]
+
+# Dedicated migration image — ships the full node_modules from the deps
+# stage so the Prisma CLI and all of its transitive dependencies
+# (@prisma/config, effect, dotenv, etc.) resolve correctly when loading
+# prisma.config.ts. Much simpler than hand-picking deps into the runner.
+FROM base AS migrate
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+CMD ["node", "node_modules/prisma/build/index.js", "db", "push"]

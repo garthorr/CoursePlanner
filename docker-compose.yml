@@ -31,14 +31,16 @@ services:
       db:
         condition: service_healthy
 
-  # Run migrations on startup
+  # Run migrations on startup — uses a dedicated migrate stage in the
+  # Dockerfile that ships the full node_modules so the Prisma CLI can
+  # load prisma.config.ts without MODULE_NOT_FOUND errors.
   migrate:
     build:
       context: .
       dockerfile: Dockerfile
+      target: migrate
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/courseplanner
-    command: npx -y -p prisma@7.7.0 -p dotenv@16 prisma db push
     depends_on:
       db:
         condition: service_healthy
