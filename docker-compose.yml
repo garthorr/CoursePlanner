@@ -38,7 +38,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/courseplanner
-    command: npx prisma db push --skip-generate
+    command: npx -y -p prisma@7.7.0 prisma db push
     depends_on:
       db:
         condition: service_healthy
