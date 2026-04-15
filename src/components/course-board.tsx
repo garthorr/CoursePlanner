@@ -15,19 +15,22 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
+  useSortable,
 } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableLessonTile } from "@/components/sortable-lesson-tile";
 import { LessonTile } from "@/components/lesson-tile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { Course, UnitWithLessons, Lesson } from "@/lib/types";
 
 interface CourseBoardProps {
   course: Course;
   onReorder: (lessonId: string, targetUnitId: string, newIndex: number) => Promise<void>;
+  onReorderUnit: (unitId: string, newIndex: number) => Promise<void>;
   onUpdateUnit: (unitId: string, name: string) => void;
   onDeleteUnit: (unitId: string) => void;
   onAddLesson: (unitId: string) => void;
@@ -35,7 +38,7 @@ interface CourseBoardProps {
   onDeleteLesson: (lessonId: string) => void;
 }
 
-function DroppableUnit({
+function SortableUnit({
   unit,
   courseSequence,
   onUpdateUnit,
@@ -56,10 +59,28 @@ function DroppableUnit({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(unit.name);
 
-  const { setNodeRef, isOver } = useDroppable({
-    id: `unit-${unit.id}`,
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: `unit-sortable-${unit.id}`,
     data: { type: "unit", unitId: unit.id },
   });
+
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: `unit-${unit.id}`,
+    data: { type: "unit-dropzone", unitId: unit.id },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const totalDays = unit.lessons.reduce((sum, l) => sum + l.duration, 0);
   const lessonIds = unit.lessons.map((l) => l.id);
@@ -72,8 +93,21 @@ function DroppableUnit({
   };
 
   return (
-    <div className={`rounded-lg border bg-card transition-colors ${isOver ? "ring-2 ring-primary/50" : ""}`}>
+    <div
+      ref={setSortableRef}
+      style={style}
+      {...attributes}
+      className={`rounded-lg border bg-card transition-colors ${isOver ? "ring-2 ring-primary/50" : ""}`}
+    >
       <div className="flex items-center gap-2 p-3">
+        <div
+          className="cursor-grab text-muted-foreground/50 shrink-0"
+          {...listeners}
+          aria-label="Drag unit"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+
         <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setExpanded(!expanded)}>
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </Button>
@@ -114,7 +148,7 @@ function DroppableUnit({
       </div>
 
       {expanded && (
-        <div ref={setNodeRef} className="border-t px-3 pb-3 pt-2 min-h-[48px]">
+        <div ref={setDroppableRef} className="border-t px-3 pb-3 pt-2 min-h-[48px]">
           <SortableContext items={lessonIds} strategy={verticalListSortingStrategy}>
             {unit.lessons.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">
@@ -145,16 +179,22 @@ function DroppableUnit({
   );
 }
 
+type ActiveDrag =
+  | { type: "lesson"; lesson: Lesson }
+  | { type: "unit"; unit: UnitWithLessons }
+  | null;
+
 export function CourseBoard({
   course,
   onReorder,
+  onReorderUnit,
   onUpdateUnit,
   onDeleteUnit,
   onAddLesson,
   onEditLesson,
   onDeleteLesson,
 }: CourseBoardProps) {
-  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -168,34 +208,68 @@ export function CourseBoard({
     [course.units]
   );
 
+  const unitSortableIds = course.units.map((u) => `unit-sortable-${u.id}`);
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
+    const activeType = active.data.current?.type;
+
+    if (activeType === "unit") {
+      const unitId = active.data.current?.unitId as string | undefined;
+      const unit = course.units.find((u) => u.id === unitId);
+      if (unit) setActiveDrag({ type: "unit", unit });
+      return;
+    }
+
+    // Default: treat as lesson drag
     const lesson = course.units
       .flatMap((u) => u.lessons)
       .find((l) => l.id === active.id);
-    setActiveLesson(lesson || null);
+    if (lesson) setActiveDrag({ type: "lesson", lesson });
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveLesson(null);
+    const drag = activeDrag;
+    setActiveDrag(null);
 
     if (!over) return;
 
+    // --- Unit reordering ---
+    if (drag?.type === "unit") {
+      const overType = over.data.current?.type;
+      // Only react when the drop target is another sortable unit.
+      if (overType !== "unit") return;
+      const overUnitId = over.data.current?.unitId as string | undefined;
+      if (!overUnitId || overUnitId === drag.unit.id) return;
+
+      const targetIndex = course.units.findIndex((u) => u.id === overUnitId);
+      const sourceIndex = course.units.findIndex((u) => u.id === drag.unit.id);
+      if (targetIndex === -1 || sourceIndex === targetIndex) return;
+
+      await onReorderUnit(drag.unit.id, targetIndex);
+      return;
+    }
+
+    // --- Lesson reordering (existing behavior) ---
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // Determine target unit
     let targetUnitId: string;
     let targetIndex: number;
 
-    if (overId.startsWith("unit-")) {
-      // Dropped on a unit container
+    if (overId.startsWith("unit-sortable-")) {
+      // Dragging a lesson onto a unit header row — place at end of that unit.
+      targetUnitId = overId.replace("unit-sortable-", "");
+      const unit = course.units.find((u) => u.id === targetUnitId);
+      targetIndex = unit?.lessons.length ?? 0;
+    } else if (overId.startsWith("unit-")) {
+      // Dropped on the empty lesson-list drop zone.
       targetUnitId = overId.replace("unit-", "");
       const unit = course.units.find((u) => u.id === targetUnitId);
       targetIndex = unit?.lessons.length ?? 0;
     } else {
-      // Dropped on another lesson
+      // Dropped on another lesson.
       const overUnit = findUnitForLesson(overId);
       if (!overUnit) return;
       targetUnitId = overUnit.id;
@@ -219,33 +293,45 @@ export function CourseBoard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-4">
-        {course.units.map((unit) => (
-          <DroppableUnit
-            key={unit.id}
-            unit={unit}
-            courseSequence={course.sequence}
-            onUpdateUnit={onUpdateUnit}
-            onDeleteUnit={onDeleteUnit}
-            onAddLesson={onAddLesson}
-            onEditLesson={onEditLesson}
-            onDeleteLesson={onDeleteLesson}
-          />
-        ))}
-      </div>
+      <SortableContext items={unitSortableIds} strategy={verticalListSortingStrategy}>
+        <div className="space-y-4">
+          {course.units.map((unit) => (
+            <SortableUnit
+              key={unit.id}
+              unit={unit}
+              courseSequence={course.sequence}
+              onUpdateUnit={onUpdateUnit}
+              onDeleteUnit={onDeleteUnit}
+              onAddLesson={onAddLesson}
+              onEditLesson={onEditLesson}
+              onDeleteLesson={onDeleteLesson}
+            />
+          ))}
+        </div>
+      </SortableContext>
 
       <DragOverlay>
-        {activeLesson ? (
+        {activeDrag?.type === "lesson" ? (
           <div className="opacity-90">
             <LessonTile
-              lesson={activeLesson}
+              lesson={activeDrag.lesson}
               courseSequence={course.sequence}
               unitSequence={
-                findUnitForLesson(activeLesson.id)?.sequence ?? 0
+                findUnitForLesson(activeDrag.lesson.id)?.sequence ?? 0
               }
               onEdit={() => {}}
               onDelete={() => {}}
             />
+          </div>
+        ) : activeDrag?.type === "unit" ? (
+          <div className="opacity-90 rounded-lg border bg-card p-3 shadow-lg">
+            <div className="flex items-center gap-2">
+              <GripVertical className="h-4 w-4 text-muted-foreground/50" />
+              <Badge variant="outline" className="font-mono text-xs">
+                {course.sequence}.{activeDrag.unit.sequence}
+              </Badge>
+              <h3 className="font-semibold text-sm">{activeDrag.unit.name}</h3>
+            </div>
           </div>
         ) : null}
       </DragOverlay>

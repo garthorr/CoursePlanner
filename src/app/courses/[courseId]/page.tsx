@@ -134,6 +134,22 @@ export default function CourseDetailPage() {
     }
   };
 
+  const handleReorderUnit = async (unitId: string, newIndex: number) => {
+    try {
+      const res = await fetch("/api/units/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unitId, newIndex }),
+      });
+      if (!res.ok) throw new Error(`Reorder unit failed: ${res.status}`);
+      await fetchCourse();
+    } catch (err) {
+      console.error("Failed to reorder unit:", err);
+      alert("Failed to reorder unit.");
+      await fetchCourse();
+    }
+  };
+
   const handleLessonSubmit = async (data: {
     title: string;
     description: string;
@@ -305,6 +321,7 @@ export default function CourseDetailPage() {
         <CourseBoard
           course={course}
           onReorder={handleReorder}
+          onReorderUnit={handleReorderUnit}
           onUpdateUnit={handleUpdateUnit}
           onDeleteUnit={handleDeleteUnit}
           onAddLesson={handleAddLesson}
